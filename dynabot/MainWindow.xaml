@@ -22,7 +22,7 @@
 			<Setter Property="VerticalContentAlignment" Value="Center"/>
 		</Style>
 
-		<!-- Button Style -->
+		<!-- Main Button Style -->
 		<Style x:Key="CyberButtonStyle" TargetType="Button">
 			<Setter Property="Background"    Value="#00D4FF"/>
 			<Setter Property="Foreground"    Value="#0D0D1A"/>
@@ -46,6 +46,39 @@
 							</Trigger>
 							<Trigger Property="IsPressed" Value="True">
 								<Setter Property="Background" Value="#007A99"/>
+							</Trigger>
+						</ControlTemplate.Triggers>
+					</ControlTemplate>
+				</Setter.Value>
+			</Setter>
+		</Style>
+
+		<!-- Small Feature Button Style (Tasks / Quiz / Log) -->
+		<Style x:Key="FeatureButtonStyle" TargetType="Button">
+			<Setter Property="Background"    Value="#1A1A2E"/>
+			<Setter Property="Foreground"    Value="#00D4FF"/>
+			<Setter Property="FontWeight"    Value="Bold"/>
+			<Setter Property="FontSize"      Value="11"/>
+			<Setter Property="FontFamily"    Value="Consolas"/>
+			<Setter Property="BorderThickness" Value="1"/>
+			<Setter Property="BorderBrush"   Value="#00D4FF"/>
+			<Setter Property="Cursor"        Value="Hand"/>
+			<Setter Property="Margin"        Value="4,0,0,0"/>
+			<Setter Property="Template">
+				<Setter.Value>
+					<ControlTemplate TargetType="Button">
+						<Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="5"
+                                Padding="10,6">
+							<ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+						</Border>
+						<ControlTemplate.Triggers>
+							<Trigger Property="IsMouseOver" Value="True">
+								<Setter Property="Background" Value="#00D4FF"/>
+								<Setter Property="Foreground" Value="#0D0D1A"/>
 							</Trigger>
 						</ControlTemplate.Triggers>
 					</ControlTemplate>
@@ -140,6 +173,8 @@
 			<Grid.RowDefinitions>
 				<RowDefinition Height="Auto"/>
 				<!-- Header -->
+				<RowDefinition Height="Auto"/>
+				<!-- Feature buttons row -->
 				<RowDefinition Height="*"/>
 				<!-- Chat ListView -->
 				<RowDefinition Height="Auto"/>
@@ -226,8 +261,50 @@
 			</Border>
 			<!--end of header border-->
 
-			<!-- ── CHAT LISTVIEW ── -->
+			<!-- ── FEATURE BUTTONS ROW ── -->
 			<Border Grid.Row="1"
+                    Background="#0F0F22"
+                    BorderBrush="#1E1E3A"
+                    BorderThickness="0,0,0,1"
+                    Padding="12,8">
+				<!--start of feature buttons border-->
+				<StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+					<!--start of feature buttons stackpanel-->
+
+					<TextBlock Text="QUICK ACTIONS:"
+                               Foreground="#555577"
+                               FontSize="11"
+                               FontFamily="Consolas"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0"/>
+
+					<Button x:Name="AddTaskButton"
+                            Content="➕ Add Task"
+                            Style="{StaticResource FeatureButtonStyle}"
+                            Click="AddTaskButton_Click"/>
+
+					<Button x:Name="ViewTasksButton"
+                            Content="📋 My Tasks"
+                            Style="{StaticResource FeatureButtonStyle}"
+                            Click="ViewTasksButton_Click"/>
+
+					<Button x:Name="QuizButton"
+                            Content="🎯 Start Quiz"
+                            Style="{StaticResource FeatureButtonStyle}"
+                            Click="QuizButton_Click"/>
+
+					<Button x:Name="ActivityLogButton"
+                            Content="🕘 Activity Log"
+                            Style="{StaticResource FeatureButtonStyle}"
+                            Click="ActivityLogButton_Click"/>
+
+				</StackPanel>
+				<!--end of feature buttons stackpanel-->
+			</Border>
+			<!--end of feature buttons border-->
+
+			<!-- ── CHAT LISTVIEW ── -->
+			<Border Grid.Row="2"
                     Margin="10,10,10,5"
                     BorderBrush="#1E1E3A"
                     BorderThickness="1"
@@ -245,7 +322,7 @@
 			<!--end of chat border-->
 
 			<!-- ── INPUT AREA ── -->
-			<Border Grid.Row="2"
+			<Border Grid.Row="3"
                     Background="#12122A"
                     BorderBrush="#00D4FF"
                     BorderThickness="0,2,0,0"
@@ -279,7 +356,7 @@
 			<!--end of input border-->
 
 			<!-- ── STATUS BAR ── -->
-			<Border Grid.Row="3"
+			<Border Grid.Row="4"
                     Background="#0A0A18"
                     Padding="15,5">
 				<!--start of status border-->

@@ -27,6 +27,15 @@ namespace dynabot
         // ── random selector for varied responses ──────────────────────
         private Random indexer = new Random();
 
+        // ── quiz game instance ─────────────────────────────────────────
+        private QuizGame quiz = new QuizGame();
+
+        // ── task creation flow state (multi-step add-task conversation) ─
+        private bool awaitingTaskTitle    = false;
+        private bool awaitingTaskReminder = false;
+        private string pendingTaskTitle   = string.Empty;
+        private string pendingTaskDesc    = string.Empty;
+
         // ── constructor ───────────────────────────────────────────────
         public MainWindow()
         {// start of constructor
@@ -35,6 +44,9 @@ namespace dynabot
 
             // populate reply and ignore lists via respond class
             new respond(reply, ignore);
+
+            // set up the database connection and tables
+            DatabaseHelper.InitializeDatabase();
 
             // load logo into both screens
             LoadLogo();
@@ -137,10 +149,14 @@ namespace dynabot
             // update memory display in header
             UpdateMemoryIndicator();
 
+            // log the session start
+            ActivityLog.LogAction(username, "Started a new session");
+
             // opening bot message
             AddBotMessage("══════════════════════════════════════");
             AddBotMessage("Hey " + username + "! I'm DynaBot, your cybersecurity assistant. 🔒");
             AddBotMessage("Ask me about: passwords, phishing, scams, privacy, malware, vpn, wifi, 2fa and more.");
+            AddBotMessage("I can also manage tasks, quiz you, and keep an activity log — try the buttons above or just type naturally!");
             AddBotMessage("══════════════════════════════════════");
 
         }// end of method
@@ -175,6 +191,43 @@ namespace dynabot
             }// end of if
         }// end of method
 
+        // ════════════════════════════════════════════════════════════
+        // ── QUICK ACTION BUTTONS ─────────────────────────────────────
+        // ════════════════════════════════════════════════════════════
+
+        // ── "Add Task" button: pre-fills the chat box ───────────────
+        private void AddTaskButton_Click(object sender, RoutedEventArgs e)
+        {// start of method
+            question.Text = "add a task to ";
+            question.Focus();
+            question.CaretIndex = question.Text.Length;
+        }// end of method
+
+        // ── "My Tasks" button: pre-fills and immediately sends ───────
+        private void ViewTasksButton_Click(object sender, RoutedEventArgs e)
+        {// start of method
+            question.Text = "show my tasks";
+            send(sender, e);
+        }// end of method
+
+        // ── "Start Quiz" button: pre-fills and immediately sends ─────
+        private void QuizButton_Click(object sender, RoutedEventArgs e)
+        {// start of method
+            question.Text = "start quiz";
+            send(sender, e);
+        }// end of method
+
+        // ── "Activity Log" button: pre-fills and immediately sends ───
+        private void ActivityLogButton_Click(object sender, RoutedEventArgs e)
+        {// start of method
+            question.Text = "show activity log";
+            send(sender, e);
+        }// end of method
+
+        // ════════════════════════════════════════════════════════════
+        // ── MAIN CHAT PROCESSOR ──────────────────────────────────────
+        // ════════════════════════════════════════════════════════════
+
         // ── send button / main chat processor ────────────────────────
         private void send(object sender, RoutedEventArgs e)
         {// start of send method
@@ -195,7 +248,87 @@ namespace dynabot
 
             string lower = questions.ToLower();
 
-            // ── conversation flow: follow-up detection ────────────────
+            // ── PRIORITY 1: are we mid-quiz? route answer to the quiz ───
+            if (quiz.IsActive)
+            {// start of if
+                HandleQuizAnswer(questions);
+                return;
+            }// end of if
+
+            // ── PRIORITY 2: are we mid task-creation flow? ───────────────
+            if (awaitingTaskTitle)
+            {// start of if
+                pendingTaskTitle  = questions;
+                awaitingTaskTitle = false;
+                awaitingTaskReminder = true;
+                AddBotMessage("Got it! Would you like to set a reminder timeframe for this task? (e.g. \"in 7 days\", or type \"no\")");
+                return;
+            }// end of if
+
+            if (awaitingTaskReminder)
+            {// start of if
+                string reminder = (lower == "no" || lower == "none") ? "Not set" : questions;
+                awaitingTaskReminder = false;
+
+                int newId = TaskAssistant.AddTask(username, pendingTaskTitle, "", reminder);
+
+                if (newId > 0)
+                {// start of inner if
+                    AddBotMessage("✅ Task added: \"" + pendingTaskTitle + "\"" +
+                        (reminder != "Not set" ? " (reminder: " + reminder + ")" : "") + ".");
+                    ActivityLog.LogAction(username, "Added task: " + pendingTaskTitle);
+                }// end of inner if
+                else
+                {// start of inner else
+                    AddBotMessage("⚠️ I couldn't save that task. Please check the database connection.");
+                }// end of inner else
+
+                return;
+            }// end of if
+
+            // ── PRIORITY 3: NLP intent detection (tasks / quiz / log) ────
+            string intent = NlpHelper.DetectIntent(lower);
+
+            if (intent == "activity_log")
+            {// start of if
+                ShowActivityLog();
+                return;
+            }// end of if
+
+            if (intent == "start_quiz")
+            {// start of if
+                StartQuiz();
+                return;
+            }// end of if
+
+            if (intent == "view_tasks")
+            {// start of if
+                ShowTasks();
+                return;
+            }// end of if
+
+            if (intent == "add_task")
+            {// start of if
+                string extractedTitle = NlpHelper.ExtractTaskTitle(questions);
+
+                if (!string.IsNullOrWhiteSpace(extractedTitle) && extractedTitle.Length > 3)
+                {// start of inner if
+                    // we already got a usable title from the phrase itself
+                    pendingTaskTitle = extractedTitle;
+                    awaitingTaskReminder = true;
+                    AddBotMessage("Got it! Would you like to set a reminder timeframe for \"" + extractedTitle + "\"? (e.g. \"in 7 days\", or type \"no\")");
+                }// end of inner if
+                else
+                {// start of inner else
+                    // need to ask for the task title separately
+                    awaitingTaskTitle = true;
+                    AddBotMessage("Sure! What would you like the task to be? (e.g. \"Enable two-factor authentication\")");
+                }// end of inner else
+
+                return;
+            }// end of if
+
+            // ── PRIORITY 4: conversation flow follow-up detection ────────
             if (IsFollowUp(lower))
             {// start of if
                 if (!string.IsNullOrEmpty(lastTopic))
@@ -210,7 +343,7 @@ namespace dynabot
                 return;
             }// end of if
 
-            // ── memory: detect favourite topic interest ───────────────
+            // ── PRIORITY 5: memory - detect favourite topic interest ─────
             if (lower.Contains("interested in") || lower.Contains("i like") || lower.Contains("favourite"))
             {// start of if
                 string[] topics = {
@@ -232,7 +365,7 @@ namespace dynabot
                 }// end of foreach
             }// end of if
 
-            // ── main word-by-word search using respond.cs logic ──────
+            // ── PRIORITY 6: main word-by-word search using respond.cs ────
             string[]  words         = lower.Split(' ');
             bool      found         = false;
             ArrayList per_word      = new ArrayList();
@@ -290,6 +423,101 @@ namespace dynabot
 
         }// end of send method
 
+        // ════════════════════════════════════════════════════════════
+        // ── TASK ASSISTANT METHODS ───────────────────────────────────
+        // ════════════════════════════════════════════════════════════
+
+        // ── display all tasks for the current user ────────────────────
+        private void ShowTasks()
+        {// start of method
+
+            var tasks = TaskAssistant.GetTasks(username);
+
+            if (tasks.Count == 0)
+            {// start of if
+                AddBotMessage("You don't have any tasks yet. Try saying \"add a task to enable 2FA\"!");
+                return;
+            }// end of if
+
+            AddBotMessage("📋 Here are your cybersecurity tasks:");
+
+            foreach (var task in tasks)
+            {// start of foreach
+                string status = task.IsCompleted ? "✅ Done" : "🔲 Pending";
+                AddBotMessage("#" + task.Id + " [" + status + "] " + task.Title +
+                    (task.ReminderDate != "Not set" ? " — reminder: " + task.ReminderDate : ""));
+            }// end of foreach
+
+            ActivityLog.LogAction(username, "Viewed task list");
+
+        }// end of method
+
+        // ════════════════════════════════════════════════════════════
+        // ── QUIZ GAME METHODS ─────────────────────────────────────────
+        // ════════════════════════════════════════════════════════════
+
+        // ── start a fresh quiz attempt ──────────────────────────────────
+        private void StartQuiz()
+        {// start of method
+
+            quiz.StartQuiz();
+
+            AddBotMessage("🎯 Cybersecurity Quiz started! Answer each question by typing the letter (A-D) or True/False.");
+            AddBotMessage(quiz.GetCurrentQuestionText());
+
+            ActivityLog.LogAction(username, "Started the cybersecurity quiz");
+
+        }// end of method
+
+        // ── handle a quiz answer submission ──────────────────────────
+        private void HandleQuizAnswer(string answer)
+        {// start of method
+
+            string feedback = quiz.SubmitAnswer(answer);
+            AddBotMessage(feedback);
+
+            if (quiz.IsFinished())
+            {// start of if
+                string finalMessage = quiz.GetFinalScoreMessage();
+                AddBotMessage(finalMessage);
+                ActivityLog.LogAction(username, "Completed the quiz: " + finalMessage.Split('\n')[0]);
+            }// end of if
+            else
+            {// start of else
+                AddBotMessage(quiz.GetCurrentQuestionText());
+            }// end of else
+
+        }// end of method
+
+        // ════════════════════════════════════════════════════════════
+        // ── ACTIVITY LOG METHODS ─────────────────────────────────────
+        // ════════════════════════════════════════════════════════════
+
+        // ── display the most recent activity log entries ─────────────
+        private void ShowActivityLog()
+        {// start of method
+
+            var entries = ActivityLog.GetRecentActions(username, 10);
+
+            if (entries.Count == 0)
+            {// start of if
+                AddBotMessage("No activity recorded yet. Start chatting, adding tasks, or taking the quiz!");
+                return;
+            }// end of if
+
+            AddBotMessage("🕘 Here's your recent activity (last " + entries.Count + "):");
+
+            foreach (var entry in entries)
+            {// start of foreach
+                AddBotMessage("[" + entry.Timestamp.ToString("dd MMM HH:mm") + "] " + entry.Description);
+            }// end of foreach
+
+        }// end of method
+
+        // ════════════════════════════════════════════════════════════
+        // ── EXISTING NLP / CONVERSATION HELPERS ──────────────────────
+        // ════════════════════════════════════════════════════════════
+
         // ── check if input is a follow-up phrase ─────────────────────
         private bool IsFollowUp(string input)
         {// start of method
@@ -344,6 +572,10 @@ namespace dynabot
             return answer;
         }// end of method
 
+        // ════════════════════════════════════════════════════════════
+        // ── DISPLAY HELPERS ───────────────────────────────────────────
+        // ════════════════════════════════════════════════════════════
+
         // ── error / default response ──────────────────────────────────
         private void error_method()
         {// start of method
@@ -362,7 +594,7 @@ namespace dynabot
             // error message in red
             Run msg = new Run(
                 "I'm not sure I understand. Can you try rephrasing? " +
-                "Try asking about passwords, phishing, scams, privacy, malware, vpn, wifi, or 2fa.")
+                "Try asking about passwords, phishing, scams, privacy, malware, vpn, wifi, 2fa, tasks, or the quiz.")
             {
                 Foreground = Brushes.Tomato
             };
