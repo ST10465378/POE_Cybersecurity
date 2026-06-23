@@ -1,0 +1,14 @@
+# build output
+bin/
+obj/
+
+# local-only database password file (never commit this)
+db_config.txt
+
+# local user file
+user_names.txt
+
+# visual studio
+.vs/
+*.user
+*.suo
